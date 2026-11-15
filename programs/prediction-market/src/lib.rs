@@ -428,6 +428,13 @@ fn try_resolve_market(market: &mut Market) -> Result<()> {
     Ok(())
 }
 
+/// Fixed-size seed for the market PDA: SHA-256 of the question bytes.
+/// Solana limits each PDA seed to 32 bytes, so the raw question cannot
+/// be used directly as a seed (questions longer than 32 bytes fail).
+fn question_seed(question: &str) -> [u8; 32] {
+    anchor_lang::solana_program::hash::hashv(&[question.as_bytes()]).to_bytes()
+}
+
 // Account structures
 #[derive(Accounts)]
 #[instruction(question: String)]
@@ -436,7 +443,7 @@ pub struct CreateMarket<'info> {
         init,
         payer = creator,
         space = 8 + Market::INIT_SPACE,
-        seeds = [b"market", creator.key().as_ref(), question.as_bytes()],
+        seeds = [b"market", creator.key().as_ref(), question_seed(&question).as_ref()],
         bump
     )]
     pub market: Account<'info, Market>,
