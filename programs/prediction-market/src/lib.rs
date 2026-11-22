@@ -119,9 +119,14 @@ pub mod prediction_market {
         market.winning_sides = [false; MAX_SIDES];
         market.num_winners = 0;
 
-        // Split net amount equally across sides
+        // Split net amount across sides, giving the first remainder sides one
+        // extra lamport so the side totals sum to total_pool exactly
+        let side_count = side_names.len() as u64;
         let amount_per_side = net_amount
-            .checked_div(side_names.len() as u64)
+            .checked_div(side_count)
+            .ok_or(ErrorCode::MathOverflow)?;
+        let remainder = net_amount
+            .checked_rem(side_count)
             .ok_or(ErrorCode::MathOverflow)?;
 
         for i in 0..side_names.len() {
@@ -130,10 +135,14 @@ pub mod prediction_market {
             let bytes = name.as_bytes();
             name_bytes[..bytes.len()].copy_from_slice(bytes);
 
+            let side_amount = amount_per_side
+                .checked_add(if remainder > (i as u64) { 1 } else { 0 })
+                .ok_or(ErrorCode::MathOverflow)?;
+
             market.sides[i] = Side {
                 name: name_bytes,
                 name_len: bytes.len() as u8,
-                total_amount: amount_per_side,
+                total_amount: side_amount,
                 num_bettors: 1,
             };
         }
@@ -150,7 +159,7 @@ pub mod prediction_market {
 
         for i in 0..side_names.len() {
             position.bets[i] = SideBet {
-                amount: amount_per_side,
+                amount: market.sides[i].total_amount,
                 has_bet: true,
             };
         }
